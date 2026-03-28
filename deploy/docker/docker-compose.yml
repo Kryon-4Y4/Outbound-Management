@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: wms-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: wms_root_2024
+      MYSQL_DATABASE: wms
+      MYSQL_USER: wms_user
+      MYSQL_PASSWORD: wms_pass_2024
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../../docs/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ../../docs/database/init-data.sql:/docker-entrypoint-initdb.d/02-init-data.sql
+    ports:
+      - "3306:3306"
+    networks:
+      - wms-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: wms-redis
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - wms-network
+    command: redis-server --appendonly yes
+
+  # 后端服务
+  backend:
+    build:
+      context: ../../wms-backend
+      dockerfile: Dockerfile
+    container_name: wms-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: wms
+      MYSQL_USER: wms_user
+      MYSQL_PASSWORD: wms_pass_2024
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - wms-network
+    restart: unless-stopped
+
+  # 前端服务
+  frontend:
+    build:
+      context: ../../wms-frontend
+      dockerfile: Dockerfile
+    container_name: wms-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - wms-network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  wms-network:
+    driver: bridge

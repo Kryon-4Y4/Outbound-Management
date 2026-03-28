@@ -1,0 +1,58 @@
+# EditorConfig 配置文件
+# 统一代码风格，支持多种IDE
+# 详见: https://editorconfig.org
+
+# 根配置文件
+root = true
+
+# 对所有文件生效
+[*]
+# 使用UTF-8编码
+charset = utf-8
+
+# 使用空格缩进
+indent_style = space
+
+# 缩进大小为4个空格
+indent_size = 4
+
+# 使用LF换行符
+end_of_line = lf
+
+# 文件末尾插入空行
+insert_final_newline = true
+
+# 删除行尾多余空格
+trim_trailing_whitespace = true
+
+# 每行最大长度
+max_line_length = 120
+
+# 对Java文件的特殊配置
+[*.java]
+indent_size = 4
+
+# 对XML文件的特殊配置
+[*.xml]
+indent_size = 2
+
+# 对YAML文件的特殊配置
+[*.{yml,yaml}]
+indent_size = 2
+
+# 对JSON文件的特殊配置
+[*.json]
+indent_size = 2
+
+# 对前端文件的特殊配置
+[*.{js,ts,vue,css,scss}]
+indent_size = 2
+
+# 对SQL文件的特殊配置
+[*.sql]
+indent_size = 2
+
+# 对Markdown文件的特殊配置
+[*.md]
+# 不删除行尾空格（Markdown中双空格表示换行）
+trim_trailing_whitespace = false

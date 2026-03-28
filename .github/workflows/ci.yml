@@ -1,0 +1,176 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # 后端构建与测试
+  backend:
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wms_test
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: --health-cmd="redis-cli ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+    
+    - name: Initialize database
+      run: |
+        mysql -h 127.0.0.1 -u root -proot wms_test < docs/database/schema.sql
+    
+    - name: Build with Maven
+      run: |
+        cd wms-backend
+        mvn clean package -DskipTests
+    
+    - name: Run tests
+      run: |
+        cd wms-backend
+        mvn test
+      env:
+        SPRING_PROFILES_ACTIVE: test
+        MYSQL_HOST: 127.0.0.1
+        MYSQL_PORT: 3306
+        MYSQL_DATABASE: wms_test
+        MYSQL_USER: root
+        MYSQL_PASSWORD: root
+        REDIS_HOST: 127.0.0.1
+        REDIS_PORT: 6379
+    
+    - name: Generate test report
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Maven Tests
+        path: wms-backend/target/surefire-reports/*.xml
+        reporter: java-junit
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: wms-backend/target/site/jacoco/jacoco.xml
+        fail_ci_if_error: false
+
+  # 前端构建
+  frontend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: wms-frontend/package.json
+    
+    - name: Install dependencies
+      run: |
+        cd wms-frontend
+        npm ci
+    
+    - name: Lint
+      run: |
+        cd wms-frontend
+        npm run lint || true
+    
+    - name: Build
+      run: |
+        cd wms-frontend
+        npm run build
+
+  # 代码质量检查
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # 需要完整历史记录
+    
+    - name: Check commit message
+      uses: wagoid/commitlint-github-action@v5
+      with:
+        configFile: .commitlintrc.js
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      with:
+        projectBaseDir: wms-backend
+        args: >
+          -Dsonar.projectKey=wms-backend
+          -Dsonar.organization=wms-team
+          -Dsonar.java.binaries=target/classes
+
+  # Docker构建
+  docker:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Build and push backend
+      uses: docker/build-push-action@v4
+      with:
+        context: ./wms-backend
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/wms-backend:${{ github.sha }}
+          ${{ secrets.DOCKER_USERNAME }}/wms-backend:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build and push frontend
+      uses: docker/build-push-action@v4
+      with:
+        context: ./wms-frontend
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/wms-frontend:${{ github.sha }}
+          ${{ secrets.DOCKER_USERNAME }}/wms-frontend:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
