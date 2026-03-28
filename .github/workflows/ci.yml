@@ -43,12 +43,12 @@ jobs:
     
     - name: Build with Maven
       run: |
-        cd wms-backend
+        cd outbound-backend
         mvn clean package -DskipTests
     
     - name: Run tests
       run: |
-        cd wms-backend
+        cd outbound-backend
         mvn test
       env:
         SPRING_PROFILES_ACTIVE: test
@@ -65,13 +65,13 @@ jobs:
       if: always()
       with:
         name: Maven Tests
-        path: wms-backend/target/surefire-reports/*.xml
+        path: outbound-backend/target/surefire-reports/*.xml
         reporter: java-junit
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
-        file: wms-backend/target/site/jacoco/jacoco.xml
+        file: outbound-backend/target/site/jacoco/jacoco.xml
         fail_ci_if_error: false
 
   # 前端构建
@@ -86,21 +86,21 @@ jobs:
       with:
         node-version: '18'
         cache: 'npm'
-        cache-dependency-path: wms-frontend/package.json
+        cache-dependency-path: outbound-frontend/package.json
     
     - name: Install dependencies
       run: |
-        cd wms-frontend
+        cd outbound-frontend
         npm ci
     
     - name: Lint
       run: |
-        cd wms-frontend
+        cd outbound-frontend
         npm run lint || true
     
     - name: Build
       run: |
-        cd wms-frontend
+        cd outbound-frontend
         npm run build
 
   # 代码质量检查
@@ -129,9 +129,9 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       with:
-        projectBaseDir: wms-backend
+        projectBaseDir: outbound-backend
         args: >
-          -Dsonar.projectKey=wms-backend
+          -Dsonar.projectKey=outbound-backend
           -Dsonar.organization=wms-team
           -Dsonar.java.binaries=target/classes
 
@@ -156,21 +156,21 @@ jobs:
     - name: Build and push backend
       uses: docker/build-push-action@v4
       with:
-        context: ./wms-backend
+        context: ./outbound-backend
         push: true
         tags: |
-          ${{ secrets.DOCKER_USERNAME }}/wms-backend:${{ github.sha }}
-          ${{ secrets.DOCKER_USERNAME }}/wms-backend:latest
+          ${{ secrets.DOCKER_USERNAME }}/outbound-backend:${{ github.sha }}
+          ${{ secrets.DOCKER_USERNAME }}/outbound-backend:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
     
     - name: Build and push frontend
       uses: docker/build-push-action@v4
       with:
-        context: ./wms-frontend
+        context: ./outbound-frontend
         push: true
         tags: |
-          ${{ secrets.DOCKER_USERNAME }}/wms-frontend:${{ github.sha }}
-          ${{ secrets.DOCKER_USERNAME }}/wms-frontend:latest
+          ${{ secrets.DOCKER_USERNAME }}/outbound-frontend:${{ github.sha }}
+          ${{ secrets.DOCKER_USERNAME }}/outbound-frontend:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
